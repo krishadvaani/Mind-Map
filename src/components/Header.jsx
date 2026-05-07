@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Network, FilePlus, Download, Undo2, Redo2, Maximize, LayoutList } from 'lucide-react';
+import { Network, FilePlus, Download, Undo2, Redo2, Maximize } from 'lucide-react';
 import ThemeToggle from './ThemeToggle';
 
 export default function Header({
@@ -10,7 +10,6 @@ export default function Header({
   onUndo,
   onRedo,
   onFitView,
-  onOrganize,
 }) {
   return (
     <header className="header">
@@ -35,10 +34,6 @@ export default function Header({
           </button>
           <button className="header-btn" onClick={onFitView} title="Fit View">
             <Maximize size={15} />
-          </button>
-          <button className="header-btn" onClick={onOrganize} title="Auto Organize">
-            <LayoutList size={15} />
-            <span className="btn-label">Organize</span>
           </button>
         </div>
       </div>

@@ -65,23 +65,14 @@ function MindNode({ id, data, selected }) {
         <Handle type="target" position={Position.Left} />
 
         <div className="node-inner" style={{ color: nodeColor }}>
-          <div className="icon-container" style={isLabelOutside ? {} : { marginRight: 12 }}>
-            <Icon size={isLabelOutside ? 28 : 20} strokeWidth={1.5} />
+          <div className="icon-container" style={{ marginRight: shape === 'rounded' ? 12 : 0 }}>
+            <Icon size={shape === 'rounded' ? 20 : 28} strokeWidth={1.5} />
           </div>
 
-          {!isLabelOutside && (
-            <div className="node-content" onDoubleClick={handleDoubleClick}>
+          {shape === 'rounded' && (
+            <div className="node-content">
               <div className="node-title">
-                <span
-                  ref={labelRef}
-                  className="node-label"
-                  contentEditable={editing}
-                  suppressContentEditableWarning
-                  onBlur={handleBlur}
-                  onKeyDown={editing ? handleKeyDown : undefined}
-                >
-                  {label}
-                </span>
+                {tier === 'root' ? 'Main Idea' : (shape.charAt(0).toUpperCase() + shape.slice(1).replace('-', ' '))}
               </div>
             </div>
           )}
@@ -108,20 +99,18 @@ function MindNode({ id, data, selected }) {
         <Handle type="source" position={Position.Right} />
       </div>
 
-      {isLabelOutside && (
-        <div className="node-external-label" onDoubleClick={handleDoubleClick}>
-          <span
-            ref={labelRef}
-            className="node-label"
-            contentEditable={editing}
-            suppressContentEditableWarning
-            onBlur={handleBlur}
-            onKeyDown={editing ? handleKeyDown : undefined}
-          >
-            {label}
-          </span>
-        </div>
-      )}
+      <div className="node-external-label" onDoubleClick={handleDoubleClick}>
+        <span
+          ref={labelRef}
+          className="node-label"
+          contentEditable={editing}
+          suppressContentEditableWarning
+          onBlur={handleBlur}
+          onKeyDown={editing ? handleKeyDown : undefined}
+        >
+          {label}
+        </span>
+      </div>
     </div>
   );
 }

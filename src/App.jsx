@@ -8,13 +8,12 @@ import { useNodeTree } from './hooks/useNodeTree';
 function AppInner() {
   const { theme, toggleTheme } = useTheme();
   const {
-    tree, addChild, addSibling, updateLabel, deleteNode,
-    toggleCollapse, updateShape, updateColor, updatePosition, batchUpdatePositions, resetTree,
+    tree, drawings, addChild, addSibling, updateLabel, deleteNode,
+    toggleCollapse, updateShape, updateColor, updatePosition, 
+    addDrawing, updateDrawings, deleteDrawing, clearDrawings, resetTree,
     undo, redo, exportJSON,
   } = useNodeTree();
   const { fitView } = useReactFlow();
-  
-  const [organizeTrigger, setOrganizeTrigger] = useState(0);
 
   const handleNewMap = useCallback(() => {
     if (window.confirm('Start a new mind map? Current work will be lost.')) {
@@ -26,10 +25,6 @@ function AppInner() {
     fitView({ padding: 0.15, duration: 400 });
   }, [fitView]);
 
-  const handleOrganize = useCallback(() => {
-    setOrganizeTrigger(prev => prev + 1);
-  }, []);
-
   return (
     <div className="app-container">
       <Header
@@ -40,10 +35,10 @@ function AppInner() {
         onUndo={undo}
         onRedo={redo}
         onFitView={handleFitView}
-        onOrganize={handleOrganize}
       />
       <MindmapCanvas
         tree={tree}
+        drawings={drawings}
         addChild={addChild}
         addSibling={addSibling}
         updateLabel={updateLabel}
@@ -52,8 +47,10 @@ function AppInner() {
         updateShape={updateShape}
         updateColor={updateColor}
         updatePosition={updatePosition}
-        batchUpdatePositions={batchUpdatePositions}
-        organizeTrigger={organizeTrigger}
+        addDrawing={addDrawing}
+        updateDrawings={updateDrawings}
+        deleteDrawing={deleteDrawing}
+        clearDrawings={clearDrawings}
         undo={undo}
         redo={redo}
       />

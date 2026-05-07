@@ -7,6 +7,7 @@ import {
   useReactFlow,
   useNodesState,
   useEdgesState,
+  applyNodeChanges,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
@@ -14,9 +15,10 @@ import MindNode from './MindNode';
 import MindEdge from './MindEdge';
 import NodeContextPanel from './NodeContextPanel';
 import FloatingSidebar from './FloatingSidebar';
+import DrawnRectNode from './DrawnRectNode';
 import { computeLayout, flattenTree } from '../utils/layoutEngine';
 
-const nodeTypes = { mindNode: MindNode };
+const nodeTypes = { mindNode: MindNode, drawnRect: DrawnRectNode };
 const edgeTypes = { mindEdge: MindEdge };
 
 // Find a node's data in the tree by id
@@ -41,107 +43,72 @@ export default function MindmapCanvas({
   updateShape,
   updateColor,
   updatePosition,
-  batchUpdatePositions,
-  organizeTrigger,
+  drawings,
+  addDrawing,
+  updateDrawings,
+  deleteDrawing,
+  clearDrawings,
   undo,
   redo,
 }) {
   const [selectedNodeId, setSelectedNodeId] = useState(null);
-  const { fitView } = useReactFlow();
+  const { fitView, screenToFlowPosition } = useReactFlow();
 
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
 
-  // Handle organize action
+  // Drawing state
+  const [activeTool, setActiveTool] = useState('select');
+  const [activeColor, setActiveColor] = useState('red');
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [drawStartPos, setDrawStartPos] = useState(null);
+  const [currentRect, setCurrentRect] = useState(null);
+
+  // Sync tree and drawings to React Flow local state
   useEffect(() => {
-    if (organizeTrigger > 0) {
-      const layout = computeLayout(tree, true); // force=true
-      setNodes((currentNodes) =>
-        layout.nodes.map((n) => ({
-          ...n,
-          data: {
-            ...n.data,
-            onAddChild: addChild,
-            onToggleCollapse: toggleCollapse,
-            onUpdateLabel: updateLabel,
-          },
-        }))
-      );
-      // Ensure positions are updated in the central tree state too in one batch
-      if (batchUpdatePositions) {
-        const updates = layout.nodes.map((n) => ({ id: n.id, position: n.position }));
-        batchUpdatePositions(updates);
+    const { nodes: treeNodes, edges: treeEdges } = flattenTree(tree);
+    
+    const flatMindNodes = treeNodes.map(n => ({
+      ...n,
+      data: {
+        ...n.data,
+        onAddChild: addChild,
+        onToggleCollapse: toggleCollapse,
+        onUpdateLabel: updateLabel,
       }
-      setTimeout(() => fitView({ padding: 0.15, duration: 400 }), 50);
-    }
-  }, [organizeTrigger]);
+    }));
 
-  // Sync tree layout to React Flow local state
-  useEffect(() => {
-    const { nodes: flatNodes, edges: flatEdges } = flattenTree(tree);
-
-    setNodes((currentNodes) => {
-      // If we have no nodes (initial load), compute layout
-      if (currentNodes.length === 0) {
-        const layout = computeLayout(tree);
-        return layout.nodes.map((n) => ({
-          ...n,
-          data: {
-            ...n.data,
-            onAddChild: addChild,
-            onToggleCollapse: toggleCollapse,
-            onUpdateLabel: updateLabel,
-          },
-        }));
-      }
-
-      // On updates, maintain existing positions
-      return flatNodes.map((fn) => {
-        const existing = currentNodes.find((cn) => cn.id === fn.id);
-        
-        // Setup data with callbacks
-        const newData = {
-          ...fn.data,
-          onAddChild: addChild,
-          onToggleCollapse: toggleCollapse,
-          onUpdateLabel: updateLabel,
-        };
-
-        if (existing) {
-          return {
-            ...fn,
-            position: existing.position,
-            data: newData,
-          };
-        } else {
-          // New node: place relative to parent
-          const edge = flatEdges.find((e) => e.target === fn.id);
-          const parentId = edge ? edge.source : null;
-          const parentNode = currentNodes.find((cn) => cn.id === parentId);
-
-          let position = { x: 0, y: 0 };
-          if (parentNode) {
-            position = {
-              x: parentNode.position.x + (parentNode.width || 140) + 60,
-              y: parentNode.position.y + (Math.random() * 40 - 20),
-            };
+    const flatDrawNodes = drawings.map(d => ({
+      ...d,
+      data: {
+        ...d.data,
+        onUpdateData: (newData) => {
+          updateDrawings(drawings.map(item => item.id === d.id ? { ...item, data: { ...item.data, ...newData } } : item));
+        },
+        onDeleteDrawing: (id) => deleteDrawing(id),
+        onResizeEnd: (id) => {
+          // Find the current dimensions from local state
+          const resized = nodes.find(n => n.id === id);
+          if (resized) {
+            updateDrawings(drawings.map(item => item.id === id ? { 
+              ...item, 
+              position: resized.position, 
+              width: resized.width, 
+              height: resized.height 
+            } : item));
           }
-          return {
-            ...fn,
-            position,
-            data: newData,
-          };
         }
-      });
-    });
+      }
+    }));
 
-    setEdges(flatEdges);
-  }, [tree, addChild, toggleCollapse, updateLabel, setNodes, setEdges]);
+    setNodes([...flatDrawNodes, ...flatMindNodes]);
+    setEdges(treeEdges);
+  }, [tree, drawings, addChild, toggleCollapse, updateLabel, deleteDrawing, updateDrawings]);
 
   // Auto-fit view on tree changes (debounced)
   useEffect(() => {
     const timeout = setTimeout(() => {
-      fitView({ padding: 0.15, duration: 300 });
+      fitView({ padding: 0.1, duration: 300 });
     }, 50);
     return () => clearTimeout(timeout);
   }, [nodes.length, fitView]);
@@ -186,20 +153,98 @@ export default function MindmapCanvas({
   }, []);
 
   const onNodeDragStop = useCallback((event, node) => {
-    if (updatePosition) {
+    if (node.type === 'mindNode') {
       updatePosition(node.id, node.position);
+    } else if (node.type === 'drawnRect') {
+      updateDrawings(drawings.map(d => d.id === node.id ? { 
+        ...d, 
+        position: node.position,
+        width: node.width,
+        height: node.height
+      } : d));
     }
-  }, [updatePosition]);
+  }, [updatePosition, updateDrawings, drawings]);
+
+  // Handle pointer events for drawing mode
+  const handlePointerDown = useCallback((e) => {
+    if (activeTool !== 'draw') return;
+    // Only start drawing if clicking on the canvas background
+    if (!e.target.closest('.react-flow__pane')) return;
+    
+    e.preventDefault();
+    const pos = screenToFlowPosition({ x: e.clientX, y: e.clientY });
+    setIsDrawing(true);
+    setDrawStartPos(pos);
+    setCurrentRect({
+      id: `rect-${Date.now()}`,
+      type: 'drawnRect',
+      position: pos,
+      width: 0,
+      height: 0,
+      data: { 
+        color: activeColor,
+        title: activeColor === 'red' ? 'Critical Area' : 'Growth Region',
+        description: 'Double-click to edit this description...'
+      },
+      zIndex: -1,
+      selectable: true,
+      draggable: true
+    });
+  }, [activeTool, activeColor, screenToFlowPosition]);
+
+  const handlePointerMove = useCallback((e) => {
+    if (!isDrawing || !currentRect || !drawStartPos) return;
+    const currentPos = screenToFlowPosition({ x: e.clientX, y: e.clientY });
+    
+    const width = Math.abs(currentPos.x - drawStartPos.x);
+    const height = Math.abs(currentPos.y - drawStartPos.y);
+    const x = Math.min(drawStartPos.x, currentPos.x);
+    const y = Math.min(drawStartPos.y, currentPos.y);
+    
+    setCurrentRect(prev => ({
+      ...prev,
+      position: { x, y },
+      width,
+      height
+    }));
+  }, [isDrawing, currentRect, drawStartPos, screenToFlowPosition]);
+
+  const handlePointerUp = useCallback(() => {
+    if (isDrawing && currentRect) {
+      if ((currentRect.width || 0) > 10 && (currentRect.height || 0) > 10) {
+        addDrawing(currentRect);
+        setActiveTool('select');
+      }
+    }
+    setIsDrawing(false);
+    setCurrentRect(null);
+    setDrawStartPos(null);
+  }, [isDrawing, currentRect, setActiveTool, addDrawing]);
+
+  const allNodesCombined = useMemo(() => {
+    return currentRect ? [...nodes, currentRect] : nodes;
+  }, [nodes, currentRect]);
+
+  // Live UI updates (no history push)
+  const onNodesChangeCombined = useCallback((changes) => {
+    onNodesChange(changes);
+  }, [onNodesChange]);
 
   // Get selected node data for context panel
   const selectedNode = selectedNodeId ? findInTree(tree, selectedNodeId) : null;
 
   return (
-    <div className="canvas-wrapper">
+    <div 
+      className={`canvas-wrapper ${activeTool === 'draw' ? 'draw-mode' : ''}`}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerLeave={handlePointerUp}
+    >
       <ReactFlow
-        nodes={nodes}
+        nodes={allNodesCombined}
         edges={edges}
-        onNodesChange={onNodesChange}
+        onNodesChange={onNodesChangeCombined}
         onEdgesChange={onEdgesChange}
         onNodeDragStop={onNodeDragStop}
         nodeTypes={nodeTypes}
@@ -207,14 +252,15 @@ export default function MindmapCanvas({
         onNodeClick={onNodeClick}
         onPaneClick={onPaneClick}
         fitView
-        fitViewOptions={{ padding: 0.15 }}
+        fitViewOptions={{ padding: 0.1 }}
         minZoom={0.15}
         maxZoom={2.5}
         proOptions={{ hideAttribution: true }}
         nodesDraggable={true}
         nodesConnectable={false}
-        elementsSelectable={true}
+        elementsSelectable={activeTool === 'select'}
         selectNodesOnDrag={false}
+        panOnDrag={activeTool === 'select'}
       >
         <svg style={{ position: 'absolute', width: 0, height: 0 }}>
           <defs>
@@ -249,7 +295,13 @@ export default function MindmapCanvas({
         currentColor={selectedNode?.color}
       />
 
-      <FloatingSidebar />
+      <FloatingSidebar 
+        activeTool={activeTool}
+        setActiveTool={setActiveTool}
+        activeColor={activeColor}
+        setActiveColor={setActiveColor}
+        onClearDrawings={clearDrawings}
+      />
     </div>
   );
 }

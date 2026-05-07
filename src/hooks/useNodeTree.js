@@ -12,16 +12,23 @@ function deepClone(obj) {
   return JSON.parse(JSON.stringify(obj));
 }
 
-function loadTree() {
+function loadData() {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) return JSON.parse(saved);
+    if (saved) {
+      const data = JSON.parse(saved);
+      // Migration: if saved data is just the tree, wrap it
+      if (data.id && data.label) {
+        return { tree: data, drawings: [] };
+      }
+      return data;
+    }
   } catch {}
-  return deepClone(defaultData);
+  return { tree: deepClone(defaultData), drawings: [] };
 }
 
-function saveTree(tree) {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(tree)); } catch {}
+function saveData(data) {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch {}
 }
 
 // Find node and its parent in tree
@@ -37,9 +44,12 @@ function findNode(tree, id, parent = null) {
 }
 
 export function useNodeTree() {
-  const [tree, setTree] = useState(loadTree);
-  const historyRef = useRef([JSON.stringify(loadTree())]);
+  const [data, setData] = useState(loadData);
+  const historyRef = useRef([JSON.stringify(loadData())]);
   const historyIdxRef = useRef(0);
+
+  const tree = data.tree;
+  const drawings = data.drawings;
 
   const pushHistory = useCallback((newTree) => {
     const json = JSON.stringify(newTree);
@@ -50,18 +60,23 @@ export function useNodeTree() {
     historyIdxRef.current = historyRef.current.length - 1;
   }, []);
 
+  const dataRef = useRef(data);
+  dataRef.current = data;
+
   const update = useCallback((updater) => {
-    setTree((prev) => {
-      const clone = deepClone(prev);
-      updater(clone);
-      saveTree(clone);
-      pushHistory(clone);
-      return clone;
-    });
+    const next = deepClone(dataRef.current);
+    updater(next);
+    saveData(next);
+    pushHistory(next);
+    setData(next);
   }, [pushHistory]);
 
+  const updateTree = useCallback((treeUpdater) => {
+    update((d) => treeUpdater(d.tree));
+  }, [update]);
+
   const addChild = useCallback((parentId, label = 'New Node') => {
-    update((t) => {
+    updateTree((t) => {
       const result = findNode(t, parentId);
       if (result) {
         if (!result.node.children) result.node.children = [];
@@ -76,10 +91,10 @@ export function useNodeTree() {
         result.node.collapsed = false;
       }
     });
-  }, [update]);
+  }, [updateTree]);
 
   const addSibling = useCallback((nodeId, label = 'New Node') => {
-    update((t) => {
+    updateTree((t) => {
       const result = findNode(t, nodeId);
       if (result && result.parent) {
         const idx = result.parent.children.findIndex((c) => c.id === nodeId);
@@ -93,17 +108,17 @@ export function useNodeTree() {
         });
       }
     });
-  }, [update]);
+  }, [updateTree]);
 
   const updateLabel = useCallback((nodeId, newLabel) => {
-    update((t) => {
+    updateTree((t) => {
       const result = findNode(t, nodeId);
       if (result) result.node.label = newLabel;
     });
-  }, [update]);
+  }, [updateTree]);
 
   const deleteNode = useCallback((nodeId) => {
-    update((t) => {
+    updateTree((t) => {
       if (t.id === nodeId) {
         t.label = 'Main Idea';
         t.children = [];
@@ -114,58 +129,74 @@ export function useNodeTree() {
         result.parent.children = result.parent.children.filter((c) => c.id !== nodeId);
       }
     });
-  }, [update]);
+  }, [updateTree]);
 
   const toggleCollapse = useCallback((nodeId) => {
-    update((t) => {
+    updateTree((t) => {
       const result = findNode(t, nodeId);
       if (result) result.node.collapsed = !result.node.collapsed;
     });
-  }, [update]);
+  }, [updateTree]);
 
   const updateShape = useCallback((nodeId, shape) => {
-    update((t) => {
+    updateTree((t) => {
       const result = findNode(t, nodeId);
       if (result) result.node.shape = shape;
     });
-  }, [update]);
+  }, [updateTree]);
 
   const updateColor = useCallback((nodeId, color) => {
-    update((t) => {
+    updateTree((t) => {
       const result = findNode(t, nodeId);
       if (result) result.node.color = color;
     });
-  }, [update]);
+  }, [updateTree]);
 
   const updatePosition = useCallback((nodeId, position) => {
-    update((t) => {
+    updateTree((t) => {
       const result = findNode(t, nodeId);
       if (result) result.node.position = position;
     });
+  }, [updateTree]);
+
+  // Drawing persistence methods
+  const addDrawing = useCallback((drawing) => {
+    update((d) => {
+      d.drawings.push(drawing);
+    });
   }, [update]);
 
-  const batchUpdatePositions = useCallback((updates) => {
-    update((t) => {
-      updates.forEach(({ id, position }) => {
-        const result = findNode(t, id);
-        if (result) result.node.position = position;
-      });
+  const updateDrawings = useCallback((newDrawings) => {
+    update((d) => {
+      d.drawings = newDrawings;
+    });
+  }, [update]);
+
+  const clearDrawings = useCallback(() => {
+    update((d) => {
+      d.drawings = [];
+    });
+  }, [update]);
+
+  const deleteDrawing = useCallback((id) => {
+    update((d) => {
+      d.drawings = d.drawings.filter((dw) => dw.id !== id);
     });
   }, [update]);
 
   const resetTree = useCallback(() => {
-    const fresh = deepClone(defaultData);
-    saveTree(fresh);
+    const fresh = { tree: deepClone(defaultData), drawings: [] };
+    saveData(fresh);
     pushHistory(fresh);
-    setTree(fresh);
+    setData(fresh);
   }, [pushHistory]);
 
   const undo = useCallback(() => {
     if (historyIdxRef.current > 0) {
       historyIdxRef.current--;
       const prev = JSON.parse(historyRef.current[historyIdxRef.current]);
-      saveTree(prev);
-      setTree(prev);
+      saveData(prev);
+      setData(prev);
     }
   }, []);
 
@@ -173,23 +204,24 @@ export function useNodeTree() {
     if (historyIdxRef.current < historyRef.current.length - 1) {
       historyIdxRef.current++;
       const next = JSON.parse(historyRef.current[historyIdxRef.current]);
-      saveTree(next);
-      setTree(next);
+      saveData(next);
+      setData(next);
     }
   }, []);
 
   const exportJSON = useCallback(() => {
-    const blob = new Blob([JSON.stringify(tree, null, 2)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = 'mindmap.json';
     a.click();
     URL.revokeObjectURL(url);
-  }, [tree]);
+  }, [data]);
 
   return {
     tree,
+    drawings,
     addChild,
     addSibling,
     updateLabel,
@@ -198,7 +230,10 @@ export function useNodeTree() {
     updateShape,
     updateColor,
     updatePosition,
-    batchUpdatePositions,
+    addDrawing,
+    updateDrawings,
+    deleteDrawing,
+    clearDrawings,
     resetTree,
     undo,
     redo,

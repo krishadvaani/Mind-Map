@@ -1,25 +1,25 @@
 import dagre from 'dagre';
 
 const NODE_DEFAULTS = {
-  'root': { width: 160, height: 50 },
-  'branch': { width: 140, height: 42 },
-  'leaf': { width: 120, height: 36 },
+  'root': { width: 220, height: 80 },
+  'branch': { width: 200, height: 70 },
+  'leaf': { width: 180, height: 60 },
 };
 
 function getTier(depth) {
   if (depth === 0) return 'root';
-  if (depth <= 2) return 'branch';
+  if (depth <= 1) return 'branch'; // Make 1st level branches larger too
   return 'leaf';
 }
 
 function getNodeDimensions(shape, tier) {
   const base = NODE_DEFAULTS[tier] || NODE_DEFAULTS.leaf;
   if (shape === 'circle') {
-    const size = tier === 'root' ? 110 : tier === 'branch' ? 90 : 72;
+    const size = tier === 'root' ? 140 : tier === 'branch' ? 120 : 100;
     return { width: size, height: size };
   }
   if (shape === 'diamond') {
-    const size = tier === 'root' ? 100 : tier === 'branch' ? 80 : 64;
+    const size = tier === 'root' ? 130 : tier === 'branch' ? 110 : 90;
     return { width: size, height: size };
   }
   return base;
@@ -71,7 +71,7 @@ export function flattenTree(tree) {
 /**
  * Flatten tree into React Flow nodes & edges, then apply dagre layout
  */
-export function computeLayout(tree, force = false) {
+export function computeLayout(tree) {
   const { nodes, edges } = flattenTree(tree);
 
   // dagre layout
@@ -79,14 +79,18 @@ export function computeLayout(tree, force = false) {
   g.setDefaultEdgeLabel(() => ({}));
   g.setGraph({
     rankdir: 'LR',
-    nodesep: 60,
-    ranksep: 150,
+    nodesep: 80,
+    ranksep: 120,
     marginx: 40,
     marginy: 40,
   });
 
+  const labelAllowance = 35;
   nodes.forEach((node) => {
-    g.setNode(node.id, { width: node.width || 140, height: node.height || 42 });
+    g.setNode(node.id, { 
+      width: node.width || 140, 
+      height: (node.height || 42) + labelAllowance 
+    });
   });
   edges.forEach((edge) => {
     g.setEdge(edge.source, edge.target);
@@ -98,7 +102,7 @@ export function computeLayout(tree, force = false) {
     const pos = g.node(node.id);
     return {
       ...node,
-      position: (!force && node.data.savedPosition) ? node.data.savedPosition : {
+      position: {
         x: pos.x - (node.width || 140) / 2,
         y: pos.y - (node.height || 42) / 2,
       },

@@ -311,27 +311,27 @@ html, body, #root {
 
 /* Shape variants */
 .mind-node.shape-rounded {
-  border-radius: 8px;
-  padding: 16px 20px;
-  min-width: 180px;
-  min-height: 60px;
+  border-radius: 12px;
+  padding: 20px 24px;
+  min-width: 200px;
+  min-height: 70px;
   justify-content: flex-start;
 }
 .mind-node.shape-custom-rounded {
   border-radius: 40px 10px 10px 40px;
-  padding: 16px;
-  min-width: 90px;
-  min-height: 90px;
+  padding: 20px;
+  min-width: 100px;
+  min-height: 100px;
 }
 .mind-node.shape-circle {
   border-radius: 50%;
-  width: 80px; height: 80px;
-  padding: 12px;
+  width: 100px; height: 100px;
+  padding: 16px;
 }
 .mind-node.shape-square, .mind-node.shape-diamond {
-  border-radius: 12px;
-  width: 80px; height: 80px;
-  padding: 12px;
+  border-radius: 16px;
+  width: 100px; height: 100px;
+  padding: 16px;
 }
 
 /* Tier overrides (optional, keeping minimal to stay true to n8n) */
@@ -356,23 +356,32 @@ html, body, #root {
   font-weight: 600;
   color: #fff;
 }
-.node-label {
-  outline: none; min-width: 20px;
-}
-.node-label[contenteditable="true"] {
-  background: rgba(255,255,255,0.1);
-  border-radius: 4px; padding: 2px 4px;
-}
 
 /* External label (underneath node) */
 .node-external-label {
-  margin-top: 8px;
+  margin-top: 10px;
   font-size: 13px;
   font-weight: 500;
   color: #a0aab2;
   text-align: center;
-  max-width: 140px;
+  width: 100%;
+  max-width: 180px;
   word-break: break-word;
+  line-height: 1.4;
+  cursor: text;
+}
+
+.node-label {
+  outline: none;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.node-label[contenteditable="true"] {
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 0 0 1px rgba(255, 179, 71, 0.5);
+  color: #fff;
 }
 
 /* React Flow handles (connection dots like n8n) */
@@ -386,19 +395,26 @@ html, body, #root {
   -webkit-backdrop-filter: blur(8px);
   border: 1px solid transparent;
   border-radius: 2px;
-  transform: rotate(45deg);
   opacity: 1;
   transition: all 0.3s ease;
-  z-index: 20; /* Ensure handle is above the edge line */
+  z-index: 100; /* Ensure joint is always above the edge line */
 }
 .mind-node .react-flow__handle:hover {
-  transform: rotate(45deg) scale(1.3);
   filter: brightness(1.2);
   box-shadow: 0 0 10px rgba(255, 179, 71, 0.6);
+  transform: translate(-50%, -50%) rotate(45deg) scale(1.3) !important;
 }
-/* Offset handles so the connection point (center) aligns better with the diamond tip */
-.mind-node .react-flow__handle-left { left: -4px; }
-.mind-node .react-flow__handle-right { right: -4px; }
+/* Center handles exactly on the node border so the line meets the joint perfectly */
+.mind-node .react-flow__handle-left { 
+  left: 0; 
+  top: 50%;
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+.mind-node .react-flow__handle-right { 
+  right: 0; 
+  top: 50%;
+  transform: translate(50%, -50%) rotate(45deg);
+}
 
 /* Add/Collapse buttons */
 .collapse-btn, .add-child-btn {
@@ -565,7 +581,6 @@ html, body, #root {
   stroke: url(#edge-gradient) !important;
   stroke-width: 1.5 !important;
   stroke-linecap: round;
-  filter: drop-shadow(0 0 1.5px rgba(153, 51, 0, 0.4));
   /* Removed transition to ensure the line follows the node instantly during drag */
 }
 
@@ -576,6 +591,10 @@ html, body, #root {
 }
 
 .react-flow__selection { background: rgba(79,209,197,0.08); border: 1px solid var(--accent); border-radius: 4px; }
+
+.draw-mode .react-flow__pane {
+  cursor: crosshair !important;
+}
 
 /* ══════════════════════════════════════════
    ANIMATIONS
