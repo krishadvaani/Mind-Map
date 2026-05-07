@@ -1,6 +1,6 @@
 import { memo, useState, useRef, useCallback } from 'react';
 import { Handle, Position } from '@xyflow/react';
-import { ChevronRight, Plus, Zap, Bot, GitMerge, Settings2 } from 'lucide-react';
+import { ChevronRight, Plus, Zap, Bot, GitMerge, Settings2, Lightbulb } from 'lucide-react';
 
 function MindNode({ id, data, selected }) {
   const { label, shape, tier, collapsed, hasChildren, color, onAddChild, onToggleCollapse, onUpdateLabel } = data;
@@ -49,7 +49,8 @@ function MindNode({ id, data, selected }) {
 
   // Determine icon based on shape
   let Icon = Settings2;
-  if (shape === 'custom-rounded') Icon = Zap;
+  if (tier === 'root') Icon = Lightbulb;
+  else if (shape === 'custom-rounded') Icon = Zap;
   else if (shape === 'rounded') Icon = Bot;
   else if (shape === 'square') Icon = GitMerge;
 
@@ -65,9 +66,11 @@ function MindNode({ id, data, selected }) {
         <Handle type="target" position={Position.Left} />
 
         <div className="node-inner" style={{ color: nodeColor }}>
-          <div className="icon-container" style={{ marginRight: shape === 'rounded' ? 12 : 0 }}>
-            <Icon size={shape === 'rounded' ? 20 : 28} strokeWidth={1.5} />
-          </div>
+          {tier === 'root' && (
+            <div className="icon-container" style={{ marginRight: shape === 'rounded' ? 12 : 0, color: 'white' }}>
+              <Icon size={shape === 'rounded' ? 20 : 28} strokeWidth={1.5} />
+            </div>
+          )}
 
           {shape === 'rounded' && (
             <div className="node-content">
